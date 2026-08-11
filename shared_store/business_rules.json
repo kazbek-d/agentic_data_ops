@@ -1,0 +1,16 @@
+{
+    "salary": {
+        "type": "float",
+        "criticality": "CRITICAL",
+        "allow_null": false,
+        "fallback_action": "abort",
+        "default_value": "0.0"
+    },
+    "department_code": {
+        "type": "string",
+        "criticality": "NON_CRITICAL",
+        "allow_null": false,
+        "fallback_action": "fill_na",
+        "default_value": "UNKNOWN"
+    }
+}

@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # --- СЛОЙ 1: МОЗГ И ИНТЕРФЕЙС (FastAPI + LangGraph + DAG Engine) ---
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: dataops_orchestrator
+    ports:
+      - "8000:8000" # Пробрасываем FastAPI наружу для нашего HITL веб-интерфейса
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Пробрасываем ключ из локального .env
+      - MCP_WORKER_URL=http://mcp_worker:5011 # Адрес рук во внутренней сети Docker
+      - QDRANT_HOST=qdrant
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-dataops_checkpoints}
+      - POSTGRES_USER=${POSTGRES_USER:-caedatallc_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-SecretPassword2026}
+    volumes:
+      - ./shared_store:/app/store # Общая папка для бизнес-правил
+    networks:
+      - dataops_network
+    depends_on:
+      - mcp_worker
+      - postgres
+      - qdrant
+    restart: always
+
+  # --- СЛОЙ 2: ВЫЧИСЛИТЕЛЬНЫЕ РУКИ (MCP + Рантайн Скриптов) ---
+  mcp_worker:
+    build:
+      context: ./mcp_worker
+      dockerfile: Dockerfile
+    container_name: dataops_mcp_worker
+    ports:
+      - "5011:5011" # Внутренний API для общения с оркестратором
+    volumes:
+      - ./shared_store:/app/store # Руки читают бизнес-правила и хранят буфер
+    networks:
+      - dataops_network
+    restart: always
+
+  # --- СЛОЙ 3: ВЕКТОРНАЯ БАЗА ЗНАНИЙ (Qdrant) ---
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: dataops_qdrant
+    ports:
+      - "6333:6333" # REST API для работы с векторами
+      - "6334:6334" # gRPC-порт для поиска
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - dataops_network
+    restart: always
+
+  # --- СЛОЙ 4: ВЕЧНАЯ ПАМЯТЬ И ДЕРЕВО СОСТОЯНИЙ DAG (PostgreSQL) ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: dataops_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dataops_checkpoints}
+      POSTGRES_USER: ${POSTGRES_USER:-caedatallc_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecretPassword2026}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dataops_network
+
+  # --- СЛОЙ 5: ВЕБ-АДМИНКА ДЛЯ ИНСПЕКЦИИ ВЕТОК (Adminer) ---
+  adminer:
+    image: adminer:latest
+    container_name: dataops_pg_adminer
+    restart: always
+    ports:
+      - "8080:8080" # Открываем веб-интерфейс Adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - dataops_network
+
+volumes:
+  shared_store:
+  qdrant_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  dataops_network:
+    driver: bridge
