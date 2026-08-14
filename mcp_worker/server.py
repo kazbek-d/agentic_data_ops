@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, List
 from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-# Импортируем официальный коннектор Snowflake
+# Import the official Snowflake connector
 try:
     import snowflake.connector
     SNOWFLAKE_AVAILABLE = True
@@ -14,12 +14,12 @@ except ImportError:
 
 app = FastAPI(
     title="CAE Data LLC DataOps MCP Worker API (Snowflake-ready)",
-    description="Вычислительный узел с поддержкой гибридного режима: локальные CSV или облачные таблицы Snowflake",
+    description="Compute node with hybrid mode support: local CSV or cloud Snowflake tables",
     version="2.0.0"
 )
 
 # =============================================================================
-# НАСТРОЙКА ПУТЕЙ И КОНФИГУРАЦИИ Snowflake ИЗ .env
+# CONFIGURING PATHS AND SNOWFLAKE SETUP FROM .env
 # =============================================================================
 BASE_DIR = "/app"
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -33,7 +33,7 @@ RULES_PATH = os.path.join(STORE_DIR, "business_rules.json")
 VALIDATE_SCRIPT = os.path.join(CORE_DIR, "validate.py")
 TRANSFORM_SCRIPT = os.path.join(CORE_DIR, "transform.py")
 
-# Параметры подключения к Snowflake
+# Snowflake connection parameters
 SF_USER = os.environ.get("SNOWFLAKE_USER")
 SF_PASSWORD = os.environ.get("SNOWFLAKE_PASSWORD")
 SF_ACCOUNT = os.environ.get("SNOWFLAKE_ACCOUNT")
@@ -41,16 +41,16 @@ SF_WAREHOUSE = os.environ.get("SNOWFLAKE_WAREHOUSE")
 SF_DATABASE = os.environ.get("SNOWFLAKE_DATABASE")
 SF_SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA", "PUBLIC")
 
-# Проверяем, настроен ли живой режим Snowflake
+# Check if Snowflake live mode is configured
 USE_SNOWFLAKE = all([SF_USER, SF_PASSWORD, SF_ACCOUNT, SF_DATABASE]) and SNOWFLAKE_AVAILABLE
 
 # =============================================================================
-# PYDANTIC КОНТРАКТЫ ДЛЯ API
+# PYDANTIC API CONTRACTS
 # =============================================================================
 class PatchRequest(BaseModel):
-    column: str = Field(..., description="Имя колонки для применения патча")
-    action: str = Field(..., description="Тип действия: fill_na или replace")
-    value: Any = Field(..., description="Значение для подстановки")
+    column: str = Field(..., description="Column name to apply the patch to")
+    action: str = Field(..., description="Action type: fill_na or replace")
+    value: Any = Field(..., description="Value to substitute")
 
 class ExecutionResponse(BaseModel):
     success: bool
@@ -59,14 +59,14 @@ class ExecutionResponse(BaseModel):
     data: Optional[Any] = None
 
 # =============================================================================
-# ВСПОМОГАТЕЛЬНЫЙ МЕНЕДЖЕР ОБЛАЧНОГО СОСТОЯНИЯ SNOWFLAKE
+# SNOWFLAKE CLOUD STATE HELPER MANAGER
 # =============================================================================
 class SnowflakeSandbox:
     def __init__(self):
         self.conn = None
 
     def get_connection(self):
-        """Создает и возвращает сессию подключения к Snowflake"""
+        """Creates and returns Snowflake connection session"""
         return snowflake.connector.connect(
             user=SF_USER,
             password=SF_PASSWORD,
@@ -78,14 +78,14 @@ class SnowflakeSandbox:
 
     def initialize_stage_tables(self):
         """
-        Имитирует копирование грязных данных из продакшн-таблицы 
-        во временную стейдж-таблицу (sandbox buffer) внутри Snowflake.
+        Simulates copying dirty data from production table 
+        to temporary stage table (sandbox buffer) inside Snowflake.
         """
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
-            print("❄️ [SNOWFLAKE] Создание демонстрационных таблиц...", flush=True)
-            # 1. Создаем сырую 'грязную' таблицу, если её нет (эмуляция прод-данных)
+            print("❄️ [SNOWFLAKE] Creating demo tables...", flush=True)
+            # 1. Create raw 'dirty' table if it doesn't exist (prod data emulation)
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS {SF_DATABASE}.{SF_SCHEMA}.salaries_prod (
                     employee_id INT,
@@ -96,7 +96,7 @@ class SnowflakeSandbox:
                 )
             """)
             
-            # Наполняем её базовыми аномалиями (если пустая)
+            # Populate it with basic anomalies (if empty)
             cursor.execute(f"SELECT COUNT(*) FROM {SF_DATABASE}.{SF_SCHEMA}.salaries_prod")
             if cursor.fetchone()[0] == 0:
                 cursor.execute(f"""
@@ -108,15 +108,15 @@ class SnowflakeSandbox:
                     (104, 'Alice Brown', '4800.00', NULL)
                 """)
             
-            # 2. Создаем чистую копию-буфер (наш Sandbox Stage)
+            # 2. Create clean copy-buffer (our Sandbox Stage)
             cursor.execute(f"CREATE OR REPLACE TABLE {SF_DATABASE}.{SF_SCHEMA}.salaries_stage CLONE {SF_DATABASE}.{SF_SCHEMA}.salaries_prod")
-            print("✨ [SNOWFLAKE] Буфер salaries_stage успешно развернут!", flush=True)
+            print("✨ [SNOWFLAKE] salaries_stage buffer successfully deployed!", flush=True)
         finally:
             cursor.close()
             conn.close()
 
     def get_data_snapshot(self) -> List[Dict[str, Any]]:
-        """Извлекает текущее состояние буфера для отображения в дешборде"""
+        """Extracts current buffer state to display in dashboard"""
         conn = self.get_connection()
         cursor = conn.cursor()
         try:
@@ -124,7 +124,7 @@ class SnowflakeSandbox:
             columns = [col[0].lower() for col in cursor.description]
             results = []
             for row in cursor.fetchall():
-                # Преобразуем None в строку 'null' для полной совместимости с фронтендом
+                # Convert None to string 'null' for full frontend compatibility
                 row_dict = dict(zip(columns, row))
                 if row_dict["department_code"] is None:
                     row_dict["department_code"] = "null"
@@ -137,7 +137,7 @@ class SnowflakeSandbox:
 sf_manager = SnowflakeSandbox() if USE_SNOWFLAKE else None
 
 # =============================================================================
-# ИНИЦИАЛИЗАЦИЯ ПЕСОЧНИЦЫ (SANDBOX) ПРИ СТАРТЕ
+# SANDBOX INITIALIZATION ON STARTUP
 # =============================================================================
 @app.on_event("startup")
 def initialize_sandbox():
@@ -146,14 +146,14 @@ def initialize_sandbox():
     os.makedirs(CORE_DIR, exist_ok=True)
     
     if USE_SNOWFLAKE:
-        print("❄️ [WORKER MODE] Запуск в режиме интеграции с облаком Snowflake!", flush=True)
+        print("❄️ [WORKER MODE] Running in Snowflake cloud integration mode!", flush=True)
         try:
             sf_manager.initialize_stage_tables()
         except Exception as e:
-            print(f"🚨 [SNOWFLAKE] Критический сбой инициализации в облаке: {e}", flush=True)
+            print(f"🚨 [SNOWFLAKE] Critical cloud initialization failure: {e}", flush=True)
     else:
-        print("💻 [WORKER MODE] Запуск в локальном режиме (Local CSV Sandbox)", flush=True)
-        # Симулируем генерацию исходных грязных данных на диске
+        print("💻 [WORKER MODE] Running in local mode (Local CSV Sandbox)", flush=True)
+        # Simulate raw dirty data generation on disk
         if not os.path.exists(RAW_DATA_PATH):
             import pandas as pd
             mock_data = {
@@ -164,41 +164,41 @@ def initialize_sandbox():
             }
             pd.DataFrame(mock_data).to_csv(RAW_DATA_PATH, index=False)
 
-        # Копируем буфер
+        # Copy the buffer
         import shutil
         shutil.copyfile(RAW_DATA_PATH, BUFFER_PATH)
 
 # =============================================================================
-# API ЭНДПОИНТЫ ВОРКЕРА
+# WORKER API ENDPOINTS
 # =============================================================================
 @app.post("/api/v1/initialize", response_model=ExecutionResponse)
 def reset_sandbox():
     try:
         if USE_SNOWFLAKE:
             sf_manager.initialize_stage_tables()
-            return ExecutionResponse(success=True, message="Облачная таблица salaries_stage успешно пересоздана в Snowflake.")
+            return ExecutionResponse(success=True, message="Cloud table salaries_stage successfully recreated in Snowflake.")
         else:
             import shutil
             shutil.copyfile(RAW_DATA_PATH, BUFFER_PATH)
-            return ExecutionResponse(success=True, message="Локальный буфер CSV успешно сброшен.")
+            return ExecutionResponse(success=True, message="Local CSV buffer successfully reset.")
     except Exception as e:
-        return ExecutionResponse(success=False, message=f"Ошибка сброса песочницы: {e}")
+        return ExecutionResponse(success=False, message=f"Sandbox reset error: {e}")
 
 @app.post("/api/v1/validate", response_model=ExecutionResponse)
 def run_validation():
-    """Синхронный запуск валидации (в облаке Snowflake или на диске)"""
+    """Synchronous validation run (in Snowflake cloud or on disk)"""
     if USE_SNOWFLAKE:
-        # Валидация средствами Snowflake SQL-запроса!
+        # Validation using Snowflake SQL query!
         conn = sf_manager.get_connection()
         cursor = conn.cursor()
         try:
-            # Читаем правила из JSON
+            # Read rules from JSON
             with open(RULES_PATH, "r", encoding="utf-8") as f:
                 rules = json.load(f)
             
             validation_issues = []
             
-            # Проверяем некритичное поле department_code
+            # Check non-critical department_code field
             if not rules.get("department_code", {}).get("allow_null", True):
                 cursor.execute(f"SELECT employee_id FROM {SF_DATABASE}.{SF_SCHEMA}.salaries_stage WHERE department_code IS NULL OR TRIM(department_code) = ''")
                 null_rows = [row[0] for row in cursor.fetchall()]
@@ -206,143 +206,143 @@ def run_validation():
                     validation_issues.append({
                         "column": "department_code",
                         "error_type": "null_not_allowed",
-                        "message": f"Обнаружены пустые значения (NULL) в строках (ID сотрудников): {null_rows}.",
+                        "message": f"Empty values (NULL) detected in rows (Employee IDs): {null_rows}.",
                         "row_indices": null_rows
                     })
                     
             if validation_issues:
                 return ExecutionResponse(
                     success=False,
-                    message="Валидатор зафиксировал несоответствие бизнес-правилам в Snowflake.",
+                    message="Validator detected business rules violation in Snowflake.",
                     data=validation_issues
                 )
-            return ExecutionResponse(success=True, message="Валидация в Snowflake пройдена.")
+            return ExecutionResponse(success=True, message="Validation in Snowflake passed.")
         except Exception as e:
-            return ExecutionResponse(success=False, message=f"Ошибка SQL-валидации: {e}")
+            return ExecutionResponse(success=False, message=f"SQL validation error: {e}")
         finally:
             cursor.close()
             conn.close()
     else:
-        # Локальный режим subprocess
+        # Local subprocess mode
         if not os.path.exists(VALIDATE_SCRIPT):
-            return ExecutionResponse(success=False, message="Скрипт валидации не найден.", stderr="FileNotFoundError")
+            return ExecutionResponse(success=False, message="Validation script not found.", stderr="FileNotFoundError")
         result = subprocess.run(["python", VALIDATE_SCRIPT], capture_output=True, text=True, encoding="utf-8")
         if result.returncode == 0:
-            return ExecutionResponse(success=True, message="Локальная валидация пройдена.")
+            return ExecutionResponse(success=True, message="Local validation passed.")
         if "DATA_ISSUES_JSON:" in result.stdout:
             issues = json.loads(result.stdout.split("DATA_ISSUES_JSON:")[1].strip())
-            return ExecutionResponse(success=False, message="Локальный валидатор нашел сбои.", data=issues)
-        return ExecutionResponse(success=False, message="Системный сбой локальной валидации.", stderr=result.stderr)
+            return ExecutionResponse(success=False, message="Local validator found issues.", data=issues)
+        return ExecutionResponse(success=False, message="System failure of local validation.", stderr=result.stderr)
 
 @app.post("/api/v1/transform", response_model=ExecutionResponse)
 def run_transformation():
-    """Синхронный запуск трансформации (облачный SQL-расчет бонусов или Pandas)"""
+    """Synchronous transformation run (cloud SQL bonus calculation or Pandas)"""
     if USE_SNOWFLAKE:
         conn = sf_manager.get_connection()
         cursor = conn.cursor()
         try:
-            # Пытаемся рассчитать бонус в Snowflake: UPDATE salaries_stage SET bonus = CAST(salary AS FLOAT) * 0.10
-            # Если в salary лежит строка 'SECRET', Snowflake упадет с ошибкой преобразования типов!
+            # Try to calculate bonus in Snowflake: UPDATE salaries_stage SET bonus = CAST(salary AS FLOAT) * 0.10
+            # If salary contains the string 'SECRET', Snowflake will fail with a type conversion error!
             cursor.execute(f"""
                 UPDATE {SF_DATABASE}.{SF_SCHEMA}.salaries_stage
                 SET bonus = TO_DOUBLE(salary) * 0.10
             """)
-            return ExecutionResponse(success=True, message="Облачная трансформация успешно завершена. Бонусы рассчитаны.")
+            return ExecutionResponse(success=True, message="Cloud transformation successfully completed. Bonuses calculated.")
         except snowflake.connector.errors.ProgrammingError as e:
-            # Перехватываем ошибку конвертации типа и возвращаем ее в оркестратор как сбой трансформации
+            # Intercept type conversion error and return it to the orchestrator as transformation failure
             return ExecutionResponse(
                 success=False, 
-                message="Ошибка трансформации в Snowflake: тип данных не может быть приведен к числу.", 
+                message="Transformation error in Snowflake: data type cannot be cast to number.", 
                 stderr=str(e)
             )
         finally:
             cursor.close()
             conn.close()
     else:
-        # Локальный режим Pandas
+        # Local Pandas mode
         if not os.path.exists(TRANSFORM_SCRIPT):
-            return ExecutionResponse(success=False, message="Скрипт трансформации не найден.")
+            return ExecutionResponse(success=False, message="Transformation script not found.")
         result = subprocess.run(["python", TRANSFORM_SCRIPT], capture_output=True, text=True, encoding="utf-8")
         if result.returncode == 0:
-            return ExecutionResponse(success=True, message="Локальная трансформация успешно выполнена.")
-        return ExecutionResponse(success=False, message="Локальный трансформатор упал.", stderr=result.stderr)
+            return ExecutionResponse(success=True, message="Local transformation successfully completed.")
+        return ExecutionResponse(success=False, message="Local transformer failed.", stderr=result.stderr)
 
 @app.post("/api/v1/patch", response_model=ExecutionResponse)
 def apply_patch(req: PatchRequest):
-    """Применение физического патча (через SQL UPDATE в Snowflake или Pandas)"""
+    """Applying a physical patch (via SQL UPDATE in Snowflake or Pandas)"""
     if USE_SNOWFLAKE:
         conn = sf_manager.get_connection()
         cursor = conn.cursor()
         try:
             if req.action == "fill_na":
-                # Заполняем NULL значения
+                # Fill NULL values
                 cursor.execute(f"""
                     UPDATE {SF_DATABASE}.{SF_SCHEMA}.salaries_stage
                     SET {req.column} = %s
                     WHERE {req.column} IS NULL OR TRIM({req.column}) = ''
                 """, (req.value,))
-                msg = f"Облачный патч [fill_na] успешно выполнен в Snowflake для колонки '{req.column}'."
+                msg = f"Cloud patch [fill_na] successfully executed in Snowflake for column '{req.column}'."
                 
             elif req.action == "replace":
-                # Заменяем нечисловые аномалии на дефолт.
-                # Пишем SQL-запрос, который пытается распарсить строку, и если это не число — меняет на req.value
+                # Replace non-numeric anomalies with default value.
+                # Write an SQL query that tries to parse the string, and if it's not a number, changes it to req.value
                 cursor.execute(f"""
                     UPDATE {SF_DATABASE}.{SF_SCHEMA}.salaries_stage
                     SET {req.column} = %s
                     WHERE TRY_TO_DOUBLE({req.column}) IS NULL AND {req.column} IS NOT NULL
                 """, (req.value,))
-                msg = f"Облачный патч [replace] успешно зачистил нечисловые аномалии в Snowflake для колонки '{req.column}'."
+                msg = f"Cloud patch [replace] successfully cleaned non-numeric anomalies in Snowflake for column '{req.column}'."
             else:
-                return ExecutionResponse(success=False, message="Неизвестный тип патча.")
+                return ExecutionResponse(success=False, message="Unknown patch type.")
                 
             return ExecutionResponse(success=True, message=msg)
         except Exception as e:
-            return ExecutionResponse(success=False, message=f"Ошибка наката SQL-патча: {e}")
+            return ExecutionResponse(success=False, message=f"SQL patch application error: {e}")
         finally:
             cursor.close()
             conn.close()
     else:
-        # Локальный режим работы с Pandas файлом
+        # Local Pandas file mode
         if not os.path.exists(BUFFER_PATH):
-            return ExecutionResponse(success=False, message="Локальный буфер отсутствует.")
+            return ExecutionResponse(success=False, message="Local buffer is missing.")
         try:
             import pandas as pd
             df = pd.read_csv(BUFFER_PATH)
             if req.column not in df.columns:
-                return ExecutionResponse(success=False, message=f"Колонка '{req.column}' не найдена.")
+                return ExecutionResponse(success=False, message=f"Column '{req.column}' not found.")
                 
             if req.action == "fill_na":
                 df[req.column] = df[req.column].fillna(req.value)
-                msg = f"Локальный патч [fill_na] применен для '{req.column}'."
+                msg = f"Local patch [fill_na] applied for '{req.column}'."
             elif req.action == "replace":
                 converted = pd.to_numeric(df[req.column], errors='coerce')
                 df[req.column] = converted.fillna(float(req.value))
-                msg = f"Локальный патч [replace] очистил аномалии в '{req.column}'."
+                msg = f"Local patch [replace] cleaned anomalies in '{req.column}'."
                 
             df.to_csv(BUFFER_PATH, index=False)
             return ExecutionResponse(success=True, message=msg)
         except Exception as e:
-            return ExecutionResponse(success=False, message=f"Ошибка наката локального патча: {e}")
+            return ExecutionResponse(success=False, message=f"Local patch application error: {e}")
 
 @app.get("/api/v1/business_rules", response_model=ExecutionResponse)
 def get_business_rules():
     if not os.path.exists(RULES_PATH):
-        return ExecutionResponse(success=False, message="Правила не найдены.")
+        return ExecutionResponse(success=False, message="Rules not found.")
     with open(RULES_PATH, "r", encoding="utf-8") as f:
         rules = json.load(f)
-    return ExecutionResponse(success=True, message="Правила прочитаны.", data=rules)
+    return ExecutionResponse(success=True, message="Rules read successfully.", data=rules)
 
 @app.get("/api/v1/code", response_model=ExecutionResponse)
 def get_script_code(script_type: str = Query(..., pattern="^(validate|transform)$")):
     target_path = VALIDATE_SCRIPT if script_type == "validate" else TRANSFORM_SCRIPT
     if not os.path.exists(target_path):
-        return ExecutionResponse(success=False, message="Код скрипта не найден.")
+        return ExecutionResponse(success=False, message="Script code not found.")
     with open(target_path, "r", encoding="utf-8") as f:
         code = f.read()
-    return ExecutionResponse(success=True, message="Код прочитан.", data=code)
+    return ExecutionResponse(success=True, message="Code read successfully.", data=code)
 
 # =============================================================================
-# ТОЧКА ВХОДА
+# ENTRY POINT
 # =============================================================================
 if __name__ == "__main__":
     import uvicorn

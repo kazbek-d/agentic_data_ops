@@ -1,20 +1,20 @@
-#Используем ультралегкий и безопасный образ Python для аналитических скриптов
+# Use ultra-lightweight and secure Python image for analytical scripts
 FROM python:3.11-slim
 
-#Задаем рабочую директорию внутри контейнера
+# Set the working directory inside the container
 WORKDIR /app
 
-#Отключаем буферизацию логов Python для моментального стриминга логов в докер
+# Disable buffering of Python logs for instant log streaming into Docker
 ENV PYTHONUNBUFFERED=1
 
-#Копируем файл зависимостей
+# Copy dependency file
 COPY requirements.txt .
 
-#Устанавливаем библиотеки без кэширования для уменьшения веса контейнера
+# Install libraries without caching to reduce container size
 RUN pip install --no-cache-dir -r requirements.txt
 
-#Копируем сам скрипт индексации
+# Copy indexing script itself
 COPY rag_indexer.py .
 
-#Точка входа запускает только индексацию
+# Entry point runs indexing only
 CMD ["python", "rag_indexer.py"]

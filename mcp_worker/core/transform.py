@@ -2,34 +2,34 @@ import os
 import sys
 import pandas as pd
 
-# Принудительно настраиваем вывод в UTF-8
+# Force stdout to UTF-8
 sys.stdout.reconfigure(encoding='utf-8')
 
 INPUT_PATH = "/app/data/stage_buffer.csv"
 
 def run_transformation():
     if not os.path.exists(INPUT_PATH):
-        print(f"Ошибка: Входной файл {INPUT_PATH} отсутствует.", file=sys.stderr)
+        print(f"Error: Input file {INPUT_PATH} is missing.", file=sys.stderr)
         sys.exit(1)
 
     try:
         df = pd.read_csv(INPUT_PATH)
         
-        # БИЗНЕС-ЛОГИКА: Рассчитываем бонус (10% от зарплаты).
-        # Это хрупкое место: astype(float) упадет со свистом, если в данных будет 'SECRET'!
+        # BUSINESS LOGIC: Calculate bonus (10% of salary).
+        # This is a fragile place: astype(float) will crash if there is 'SECRET' in the data!
         df["bonus"] = df["salary"].astype(float) * 0.10
         
-        # Сохраняем успешно обработанные данные обратно в буфер песочницы
+        # Save successfully processed data back to sandbox buffer
         df.to_csv(INPUT_PATH, index=False)
-        print("Трансформация успешно выполнена. Расчитан бонус 10% в колонке 'bonus'.")
+        print("Transformation successfully completed. Calculated 10% bonus in the 'bonus' column.")
         sys.exit(0)
         
     except ValueError as val_err:
-        # Передаем подробный трейсбэк ошибки конвертации типов в stderr
-        print(f"ValueError: could not convert string to float в колонке 'salary'. Нечисловые данные заблокировали расчет.", file=sys.stderr)
+        # Pass detailed traceback of type conversion error to stderr
+        print(f"ValueError: could not convert string to float in column 'salary'. Non-numeric data blocked the calculation.", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"Критический рантайм-сбой при расчете трансформации: {e}", file=sys.stderr)
+        print(f"Critical runtime failure during transformation calculation: {e}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":

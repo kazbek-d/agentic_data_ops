@@ -7,7 +7,7 @@ from google import genai
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, PointStruct
 
-# Настройки подключения к Qdrant во внутренней сети Docker
+# Qdrant connection settings inside the internal Docker network
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "qdrant")
 QDRANT_PORT = int(os.environ.get("QDRANT_PORT", 6333))
 
@@ -19,10 +19,10 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 
 def init_vector_db():
     """
-    Инициализирует гибридную коллекцию в Qdrant с индексацией полей метаданных
-    для супербыстрой детерминированной фильтрации подграфов.
+    Initializes a hybrid collection in Qdrant with metadata fields indexing
+    for super-fast deterministic subgraph filtering.
     """
-    print(f"📡 Подключение к Qdrant на {QDRANT_HOST}:{QDRANT_PORT}...")
+    print(f"📡 Connecting to Qdrant at {QDRANT_HOST}:{QDRANT_PORT}...")
     
     try:
         collections = qdrant_client.get_collections().collections
@@ -31,7 +31,7 @@ def init_vector_db():
         exists = False
     
     if exists:
-        print(f"🧹 Пересоздание коллекции '{COLLECTION_NAME}'...")
+        print(f"🧹 Recreating collection '{COLLECTION_NAME}'...")
         qdrant_client.delete_collection(COLLECTION_NAME)
         
     qdrant_client.create_collection(
@@ -44,7 +44,7 @@ def init_vector_db():
         }
     )
     
-    # Создаем детерминированные индексы полезной нагрузки для изоляции доменов
+    # Create deterministic payload indexes for domain isolation
     qdrant_client.create_payload_index(
         collection_name=COLLECTION_NAME,
         field_name="target_column",
@@ -60,7 +60,7 @@ def init_vector_db():
         field_name="table_name",
         field_schema=models.PayloadSchemaType.KEYWORD,
     )
-    print(f"✨ Коллекция '{COLLECTION_NAME}' с индексами метаданных создана!")
+    print(f"✨ Collection '{COLLECTION_NAME}' with metadata indexes created!")
 
 def generate_dense_embedding(text: str) -> list[float]:
     response = gemini_client.models.embed_content(
@@ -90,14 +90,14 @@ def generate_sparse_vector(text: str) -> models.SparseVector:
     return models.SparseVector(indices=sorted_indices, values=sorted_values)
 
 def index_business_rules():
-    """Считывает контракты, обогащает доменными метаданными и индексирует в Qdrant"""
+    """Reads contracts, enriches with domain metadata, and indexes in Qdrant"""
     rules_path = "/app/store/business_rules.json"
     if not os.path.exists(rules_path):
-        # Резервный локальный путь для тестов вне докера
+        # Fallback local path for testing outside Docker
         rules_path = "shared_store/business_rules.json"
 
     if not os.path.exists(rules_path):
-        print(f"🚨 Ошибка: файл бизнес-правил не найден: {rules_path}")
+        print(f"🚨 Error: business rules file not found: {rules_path}")
         return
 
     with open(rules_path, "r", encoding="utf-8") as f:
@@ -110,18 +110,18 @@ def index_business_rules():
         schema_version = rule_details.get("schema_version", "v1.0")
 
         rule_text = (
-            f"Правило качества данных для колонки '{column}' в таблице '{table_name}' (Домен: {domain}, Версия: {schema_version}). "
-            f"Тип данных: {rule_details.get('type')}. "
-            f"Уровень критичности: {rule_details.get('criticality')}. "
-            f"Разрешены ли пустые значения: {rule_details.get('allow_null')}. "
-            f"Стратегия восстановления: {rule_details.get('fallback_action')}. "
-            f"Значение по умолчанию: {rule_details.get('default_value')}."
+            f"Data quality rule for column '{column}' in table '{table_name}' (Domain: {domain}, Version: {schema_version}). "
+            f"Data type: {rule_details.get('type')}. "
+            f"Criticality level: {rule_details.get('criticality')}. "
+            f"Are null values allowed: {rule_details.get('allow_null')}. "
+            f"Fallback action strategy: {rule_details.get('fallback_action')}. "
+            f"Default value: {rule_details.get('default_value')}."
         )
         
-        print(f"🧠 [Dense Embed] Кодирование правила для {table_name}.{column}...")
+        print(f"🧠 [Dense Embed] Encoding rule for {table_name}.{column}...")
         dense_vector = generate_dense_embedding(rule_text)
         
-        print(f"🔍 [Sparse Hash] Генерация разреженного вектора для {table_name}.{column}...")
+        print(f"🔍 [Sparse Hash] Generating sparse vector for {table_name}.{column}...")
         sparse_vector = generate_sparse_vector(rule_text)
         
         point = PointStruct(
@@ -147,7 +147,7 @@ def index_business_rules():
         collection_name=COLLECTION_NAME,
         points=points
     )
-    print(f"🚀 Успешно загружено {len(points)} векторов с изолированными метаданными доменов!")
+    print(f"🚀 Successfully uploaded {len(points)} vectors with isolated domain metadata!")
 
 if __name__ == "__main__":
     init_vector_db()

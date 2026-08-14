@@ -1,38 +1,37 @@
-
 agentic_data_ops/
 │
-├── docker-compose.yml          # Главный оркестратор контейнеров
+├── docker-compose.yml          # Main container orchestrator
 │
-├── orchestrator/               # КОНТЕЙНЕР 1: Мозг системы (FastAPI + LangGraph)
+├── orchestrator/               # CONTAINER 1: Brain of the system (FastAPI + LangGraph)
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── src/
-│       ├── app.py              # Веб-сервер и эндпоинты для HITL
-│       ├── graph.py            # Логика графа и роутинг
-│       └── database.py         # Подключение к SQLiteSaver
+│       ├── app.py              # Web server and endpoints for HITL
+│       ├── graph.py            # Graph logic and routing
+│       └── database.py         # Connection to PostgresSaver
 │
-├── mcp_worker/                 # КОНТЕЙНЕР 2: Вычислительные руки (MCP + Песочница)
+├── mcp_worker/                 # CONTAINER 2: Computational arms (MCP + Sandbox)
 │   ├── Dockerfile
 │   ├── requirements.txt
-│   ├── server.py               # MCP-сервер, слушающий команды по HTTP/JSON-RPC
-│   ├── core/                   # Черные ящики бизнес-логики
+│   ├── server.py               # MCP server listening for commands over HTTP/JSON-RPC
+│   ├── core/                   # Black boxes of business logic
 │   │   ├── validate.py
 │   │   └── transform.py
-│   └── data/                   # Изолированная песочница данных
+│   └── data/                   # Isolated data sandbox
 │       └── stage_buffer.csv
 │
-└── shared_store/               # Общий Volume на диске (для RAG и Чекпоинтов)
+└── shared_store/               # Shared volume on disk (for RAG and Checkpoints)
     ├── business_rules.json
     ├── architecture_notes.txt
-    └── checkpoints.db          # Сюда SQLite будет намертво бессмертно писать стейт
+    └── checkpoints.db          # SQLite DB where checkpoints were historically written (if SQLite is used)
 
 
 -----------------------------------------------------------------------------
 
-# Останавливаем и полностью вычищаем старые изолированные сети
+# Stop and completely clean old isolated networks
 docker-compose down
 
-# Останавливаем и полностью вычищаем старый вольюм
+# Stop and completely clean old volume
 docker-compose down -v
 
 docker-compose up --build
@@ -45,7 +44,7 @@ docker run --rm --network agentic_data_ops_dataops_network --env-file .env -v $(
 ----------------------------------------------------------------------------- 
 
 curl -X POST "http://localhost:8000/api/v1/pipeline/start" -H "Content-Type: application/json" -d '{"max_retries": 3}'
-curl -X POST "http://localhost:8000/api/v1/pipeline/approve" -H "Content-Type: application/json" -d '{"thread_id": "thread_f5d89908", "approved": true, "comment": "Патч для департамента одобрен"}'
+curl -X POST "http://localhost:8000/api/v1/pipeline/approve" -H "Content-Type: application/json" -d '{"thread_id": "thread_f5d89908", "approved": true, "comment": "Department patch approved"}'
 
 -----------------------------------------------------------------------------
 
@@ -54,19 +53,19 @@ curl -X POST "http://localhost:8000/api/v1/pipeline/approve" -H "Content-Type: a
 
 -----------------------------------------------------------------------------
 QA with Tree State
-1. Запусти новый пайплайн, чтобы зафиксировать корень дерева:
+1. Run new pipeline to commit the root of the tree:
 curl -X POST "http://localhost:8000/api/v1/pipeline/start" -H "Content-Type: application/json" -d '{"max_retries": 3}'
 
-2. Запроси дерево состояний (DAG History) по полученному thread_id:
+2. Request the state tree (DAG History) using the received thread_id:
 curl -X GET "http://localhost:8000/api/v1/pipeline/history/<THREAD_ID>"
-(В ответе прилетит массив узлов с их node_id, parent_id и именами веток).
+(The response will contain an array of nodes with their node_id, parent_id and branch names).
 
-3. Проверь ответвление (Time-Travel / Fork), взяв node_id из предыдущего ответа:
+3. Check branching (Time-Travel / Fork), taking the node_id from the previous response:
 curl -X POST "http://localhost:8000/api/v1/pipeline/fork" -H "Content-Type: application/json" -d '{ "thread_id": "<THREAD_ID>", "from_node_id": "<NODE_ID>", "new_branch_name": "hypothesis/experimental_fix" }'
-А также загляни в Adminer на http://localhost:8000 (или http://localhost:8080) в таблицу state_nodes — там у каждого узла будет виден его родитель parent_id!
+Also take a look at Adminer on http://localhost:8000 (or http://localhost:8080) in the state_nodes table — every node's parent_id will be visible there!
 
 -----------------------------------------------------------------------------
-Если нужно что-то перезапустить без отката:
+If you need to restart something without rollbacks:
 docker-compose restart orchestrator
 
 -----------------------------------------------------------------------------

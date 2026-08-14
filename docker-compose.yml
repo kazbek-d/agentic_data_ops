@@ -1,17 +1,17 @@
 version: '3.8'
 
 services:
-  # --- СЛОЙ 1: МОЗГ И ИНТЕРФЕЙС (FastAPI + LangGraph + DAG Engine) ---
+  # --- LAYER 1: BRAIN AND INTERFACE (FastAPI + LangGraph + DAG Engine) ---
   orchestrator:
     build:
       context: ./orchestrator
       dockerfile: Dockerfile
     container_name: dataops_orchestrator
     ports:
-      - "8000:8000" # Пробрасываем FastAPI наружу для нашего HITL веб-интерфейса
+      - "8000:8000" # Expose FastAPI port for our HITL web interface
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY} # Пробрасываем ключ из локального .env
-      - MCP_WORKER_URL=http://mcp_worker:5011 # Адрес рук во внутренней сети Docker
+      - GEMINI_API_KEY=${GEMINI_API_KEY} # Pass the API key from local .env
+      - MCP_WORKER_URL=http://mcp_worker:5011 # MCP worker address in internal Docker network
       - QDRANT_HOST=qdrant
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
@@ -19,7 +19,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-caedatallc_admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-SecretPassword2026}
     volumes:
-      - ./shared_store:/app/store # Общая папка для бизнес-правил
+      - ./shared_store:/app/store # Shared folder for business rules
     networks:
       - dataops_network
     depends_on:
@@ -28,34 +28,34 @@ services:
       - qdrant
     restart: always
 
-  # --- СЛОЙ 2: ВЫЧИСЛИТЕЛЬНЫЕ РУКИ (MCP + Рантайн Скриптов) ---
+  # --- LAYER 2: COMPUTATIONAL ARMS (MCP + Script Runtime) ---
   mcp_worker:
     build:
       context: ./mcp_worker
       dockerfile: Dockerfile
     container_name: dataops_mcp_worker
     ports:
-      - "5011:5011" # Внутренний API для общения с оркестратором
+      - "5011:5011" # Internal API for communicating with the orchestrator
     volumes:
-      - ./shared_store:/app/store # Руки читают бизнес-правила и хранят буфер
+      - ./shared_store:/app/store # Worker reads business rules and stores buffer
     networks:
       - dataops_network
     restart: always
 
-  # --- СЛОЙ 3: ВЕКТОРНАЯ БАЗА ЗНАНИЙ (Qdrant) ---
+  # --- LAYER 3: VECTOR KNOWLEDGE BASE (Qdrant) ---
   qdrant:
     image: qdrant/qdrant:v1.18.0
     container_name: dataops_qdrant
     ports:
-      - "6333:6333" # REST API для работы с векторами
-      - "6334:6334" # gRPC-порт для поиска
+      - "6333:6333" # REST API for working with vectors
+      - "6334:6334" # gRPC port for search
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
       - dataops_network
     restart: always
 
-  # --- СЛОЙ 4: ВЕЧНАЯ ПАМЯТЬ И ДЕРЕВО СОСТОЯНИЙ DAG (PostgreSQL) ---
+  # --- LAYER 4: PERSISTENT MEMORY AND DAG STATE TREE (PostgreSQL) ---
   postgres:
     image: postgres:16-alpine
     container_name: dataops_postgres
@@ -71,13 +71,13 @@ services:
     networks:
       - dataops_network
 
-  # --- СЛОЙ 5: ВЕБ-АДМИНКА ДЛЯ ИНСПЕКЦИИ ВЕТОК (Adminer) ---
+  # --- LAYER 5: WEB ADMIN FOR BRANCH INSPECTION (Adminer) ---
   adminer:
     image: adminer:latest
     container_name: dataops_pg_adminer
     restart: always
     ports:
-      - "8080:8080" # Открываем веб-интерфейс Adminer
+      - "8080:8080" # Open Adminer web interface
     environment:
       ADMINER_DEFAULT_SERVER: postgres
     networks:

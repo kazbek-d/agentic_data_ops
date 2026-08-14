@@ -7,38 +7,38 @@ from collections import Counter
 from typing import TypedDict, List, Dict, Any, Literal, Optional
 from pydantic import BaseModel, Field, ValidationError
 
-# Официальный SDK от Google
+# Official Google SDK
 from google import genai
 from google.genai import types
 
-# Qdrant клиент и фильтры для детерминированного RAG
+# Qdrant client and filters for deterministic RAG
 from qdrant_client import QdrantClient, models
 
-# Компоненты LangGraph и наш менеджер памяти базы данных
+# LangGraph components and our database memory manager
 from langgraph.graph import StateGraph, END
 from database import db_manager
 
-# Менеджер стерильной рабочей памяти (Working Memory)
+# Sterile Working Memory manager
 from context_manager import prune_and_compress_context, format_working_memory_for_llm
 
 
 # =============================================================================
-# 1. СТРОГИЙ СЕМАНТИЧЕСКИЙ КОНТРАКТ ДЛЯ ВАЛИДАЦИИ ОТВЕТА LLM
+# 1. STRICT SEMANTIC CONTRACT FOR LLM RESPONSE VALIDATION
 # =============================================================================
 
 class ToolCallProposal(BaseModel):
-    analysis: str = Field(description="Анализ лога ошибки и контекста.")
-    explanation: str = Field(description="Инженерное обоснование предлагаемого исправления.")
+    analysis: str = Field(description="Analysis of the error log and context.")
+    explanation: str = Field(description="Engineering rationale for the proposed fix.")
     criticality_assessment: Literal["CRITICAL", "NON_CRITICAL"] = Field(
-        description="Оценка критичности поврежденного поля на основе бизнес-правил."
+        description="Assessment of field criticality based on business rules."
     )
-    action_type: Literal["fill_na", "replace"] = Field(description="Тип применяемого инструмента.")
-    target_column: str = Field(description="Имя колонки, которую нужно починить.")
-    patch_value: str = Field(description="Значение, которое нужно подставить (строка).")
+    action_type: Literal["fill_na", "replace"] = Field(description="Type of tool to apply.")
+    target_column: str = Field(description="Name of the column to repair.")
+    patch_value: str = Field(description="Value to substitute (string).")
 
 
 # =============================================================================
-# 2. ENTERPRISE СТРУКТУРА СОСТОЯНИЯ
+# 2. ENTERPRISE STATE STRUCTURE
 # =============================================================================
 
 class AgentState(TypedDict):
@@ -55,7 +55,7 @@ class AgentState(TypedDict):
 
 
 # =============================================================================
-# 3. КЛАСС ОРКЕСТРАТОРА (DETERMINISTIC SUB-GRAPH RAG + WORKING MEMORY)
+# 3. ORCHESTRATOR CLASS (DETERMINISTIC SUB-GRAPH RAG + WORKING MEMORY)
 # =============================================================================
 
 class AgenticDataOpsGraph:
@@ -100,15 +100,15 @@ class AgenticDataOpsGraph:
         return models.SparseVector(indices=sorted_indices, values=sorted_values)
 
 
-    # --- NODES (СИНХРОННЫЕ УЗЛЫ ГРАФА) ---
+    # --- NODES (SYNCHRONOUS GRAPH NODES) ---
 
     def node_check_and_transform(self, state: AgentState) -> AgentState:
         if state["status"] == "REJECTED":
             return state
 
-        self._log(state, "Запуск узла: Проверка и Трансформация данных через HTTP MCP")
+        self._log(state, "Running node: Check and Transform data via HTTP MCP")
         
-        # Фиксируем доменные контексты таблицы
+        # Pin table domain contexts
         state["target_table"] = "salaries_stage"
         state["domain"] = "payroll_ops"
 
@@ -116,17 +116,17 @@ class AgenticDataOpsGraph:
             res = requests.post(f"{self.mcp_url}/api/v1/validate", timeout=15).json()
         except Exception as e:
             state["status"] = "INFRA_ERROR"
-            state["current_errors"] = [{"code": "mcp_unreachable", "message": f"Воркер недоступен: {e}"}]
+            state["current_errors"] = [{"code": "mcp_unreachable", "message": f"Worker unreachable: {e}"}]
             return state
 
         if not res["success"]:
             if res.get("stderr"): 
-                self._log(state, f"🚨 СБОЙ ИНФРАСТРУКТУРЫ ВОРКЕРА: {res['message']}")
+                self._log(state, f"🚨 WORKER INFRASTRUCTURE FAILURE: {res['message']}")
                 state["status"] = "INFRA_ERROR"
                 state["current_errors"] = [{"code": "worker_infra_error", "stderr": res["stderr"]}]
                 return state
             
-            self._log(state, "Валидатор воркера обнаружил дефекты структуры данных.")
+            self._log(state, "Worker validator detected data structure defects.")
             state["status"] = "VALIDATION_FAILED"
             state["current_errors"] = res["data"]
             return state
@@ -135,32 +135,32 @@ class AgenticDataOpsGraph:
             res = requests.post(f"{self.mcp_url}/api/v1/transform", timeout=15).json()
         except Exception as e:
             state["status"] = "INFRA_ERROR"
-            state["current_errors"] = [{"code": "mcp_unreachable", "message": f"Воркер недоступен: {e}"}]
+            state["current_errors"] = [{"code": "mcp_unreachable", "message": f"Worker unreachable: {e}"}]
             return state
 
         if not res["success"]:
-            self._log(state, "Трансформатор упал с рантайм ошибкой.")
+            self._log(state, "Transformer failed with a runtime error.")
             state["status"] = "TRANSFORM_FAILED"
             state["current_errors"] = [{"code": "runtime_error", "stderr": res["stderr"]}]
             return state
 
-        self._log(state, "[ SUCCESS ] Пайплайн успешно выполнен воркером!")
+        self._log(state, "[ SUCCESS ] Pipeline successfully executed by worker!")
         state["status"] = "SUCCESS"
         state["current_errors"] = []
         return state
 
     def node_ai_analyst(self, state: AgentState) -> AgentState:
-        self._log(state, f"Запуск узла: AI-Аналитик (Итерация рефлексии: {state['retry_count'] + 1})")
+        self._log(state, f"Running node: AI Analyst (Reflection iteration: {state['retry_count'] + 1})")
         state["retry_count"] += 1
         
         # =============================================================================
-        # 1. ДЕТЕРМИНИРОВАННЫЙ RAG ПОИСК (QDRANT PAYLOAD FILTERING)
+        # 1. DETERMINISTIC RAG SEARCH (QDRANT PAYLOAD FILTERING)
         # =============================================================================
-        error_context_text = f"Сбой в пайплайне данных. Дефекты и трейсбэк: {json.dumps(state['current_errors'])}"
+        error_context_text = f"Data pipeline failure. Defects and traceback: {json.dumps(state['current_errors'])}"
         rule_text = ""
         
         try:
-            # 1.1 Плотный вектор (Dense)
+            # 1.1 Dense vector
             emb_res = self.gemini_client.models.embed_content(
                 model=self.embedding_model,
                 contents=error_context_text,
@@ -168,14 +168,14 @@ class AgenticDataOpsGraph:
             )
             query_dense_vector = emb_res.embeddings[0].values
             
-            # 1.2 Разреженный вектор (Sparse)
+            # 1.2 Sparse vector
             query_sparse_vector = self._generate_sparse_vector(error_context_text)
             
-            # 1.3 Построение жесткого доменного фильтра полезной нагрузки (Payload Filter)
+            # 1.3 Building rigid payload domain filter (Payload Filter)
             target_table = state.get("target_table", "salaries_stage")
             domain = state.get("domain", "payroll_ops")
             
-            # Если в логе ошибки есть конкретная колонка — сужаем фильтр до колонки!
+            # If there is a specific column in the error log - narrow the filter down to the column!
             target_col = None
             if state['current_errors'] and isinstance(state['current_errors'], list):
                 first_err = state['current_errors'][0]
@@ -195,11 +195,11 @@ class AgenticDataOpsGraph:
 
             self._log(
                 state, 
-                f"🛡️ Выполнение детерминированного RAG-запроса в подграф [{domain} -> {target_table}" + 
+                f"🛡️ Executing deterministic RAG query in subgraph [{domain} -> {target_table}" + 
                 (f" -> {target_col}]" if target_col else "]")
             )
             
-            # 1.4 Нативный гибридный запрос с детерминированной изоляцией подграфа
+            # 1.4 Native hybrid query with deterministic subgraph isolation
             search_results = self.qdrant_client.query_points(
                 collection_name=self.collection_name,
                 prefetch=[
@@ -207,7 +207,7 @@ class AgenticDataOpsGraph:
                     models.Prefetch(query=query_sparse_vector, using="sparse-keywords", limit=5)
                 ],
                 query=models.FusionQuery(fusion=models.Fusion.RRF),
-                query_filter=query_filter, # Изоляция подграфа на уровне движка
+                query_filter=query_filter, # Subgraph isolation at engine level
                 limit=1
             ).points
             
@@ -215,34 +215,34 @@ class AgenticDataOpsGraph:
                 best_match = search_results[0]
                 confidence = round(best_match.score * 100, 2)
                 rule_text = best_match.payload.get("rule_text", "")
-                self._log(state, f"🎯 Извлечено изолированное доменное правило с RRF-уверенностью {confidence}%!")
+                self._log(state, f"🎯 Retrieved isolated domain rule with RRF confidence {confidence}%!")
             else:
-                self._log(state, "⚠️ Правило в данном изолированном подграфе не найдено. Кросс-доменные правила заблокированы!")
-                rule_text = "Специфичное доменное правило качества отсутствует в изолированном контексте."
+                self._log(state, "⚠️ Rule not found in this isolated subgraph. Cross-domain rules blocked!")
+                rule_text = "Specific domain quality rule is absent in the isolated context."
                 
         except Exception as e:
-            self._log(state, f"💥 Сбой детерминированного RAG в Qdrant: {e}")
+            self._log(state, f"💥 Deterministic RAG failure in Qdrant: {e}")
             state["status"] = "INFRA_ERROR"
             state["current_errors"] = [{"code": "qdrant_deterministic_rag_error", "message": str(e)}]
             return state
 
-        # 2. Получение исходного кода
+        # 2. Getting source code
         code = ""
         try:
             script_type = "transform" if state["status"] in ["TRANSFORM_FAILED", "FORMAT_ERROR"] else "validate"
             code = requests.get(f"{self.mcp_url}/api/v1/code?script_type={script_type}", timeout=5).json().get("data", "")
         except Exception as e:
-            self._log(state, f"Не удалось получить исходный код с воркера: {e}")
+            self._log(state, f"Failed to get source code from worker: {e}")
             state["status"] = "INFRA_ERROR"
             state["current_errors"] = [{"code": "worker_context_unreachable", "message": str(e)}]
             return state
 
         # =============================================================================
-        # 3. СТЕРИЛИЗАЦИЯ В WORKING MEMORY
+        # 3. STERILIZATION IN WORKING MEMORY
         # =============================================================================
         anchor_prompt = (
-            "Ты — старший ИИ-инженер поддержки данных в CAE Data LLC. "
-            "Ты анализируешь сбои пайплайнов и генерируешь строго валидные патчи данных."
+            "You are a Senior Data Support AI Engineer at CAE Data LLC. "
+            "You analyze pipeline failures and generate strictly valid data patches."
         )
 
         rag_rules_list = [rule_text] if rule_text else []
@@ -262,12 +262,12 @@ class AgenticDataOpsGraph:
 
         if state["status"] == "FORMAT_ERROR":
             user_content = (
-                "⚠️ КРИТИЧЕСКАЯ ОШИБКА ФОРМАТА: На прошлoм шаге твой ответ не прошел Pydantic валидацию!\n"
-                f"Прошлый ответ: {state.get('raw_llm_response', '')}\n\n" + user_content
+                "⚠️ CRITICAL FORMAT ERROR: In the previous step, your response failed Pydantic validation!\n"
+                f"Previous response: {state.get('raw_llm_response', '')}\n\n" + user_content
             )
 
         # =============================================================================
-        # 4. ВЫЗОВ GEMINI SDK СО STRUCTURED OUTPUTS
+        # 4. GEMINI SDK CALL WITH STRUCTURED OUTPUTS
         # =============================================================================
         try:
             response = self.gemini_client.models.generate_content(
@@ -282,7 +282,7 @@ class AgenticDataOpsGraph:
             )
             llm_text = response.text
         except Exception as e:
-            self._log(state, f"Сбой прямого вызова Gemini API: {e}")
+            self._log(state, f"Gemini API direct call failed: {e}")
             state["status"] = "INFRA_ERROR"
             state["current_errors"] = [{"code": "gemini_api_error", "message": str(e)}]
             state["proposed_fix"] = {}
@@ -294,9 +294,9 @@ class AgenticDataOpsGraph:
             proposal = ToolCallProposal.model_validate_json(llm_text)
             state["proposed_fix"] = proposal.model_dump()
             state["status"] = "PENDING"
-            self._log(state, f"Успешная валидация формата для поля '{proposal.target_column}'")
+            self._log(state, f"Successful format validation for field '{proposal.target_column}'")
         except ValidationError as e:
-            self._log(state, "💥 Ошибка формата ответа модели!")
+            self._log(state, "💥 Model response format error!")
             state["status"] = "FORMAT_ERROR"
             state["current_errors"] = e.errors(include_url=False)
             state["proposed_fix"] = {}
@@ -305,14 +305,14 @@ class AgenticDataOpsGraph:
 
     def node_apply_fix(self, state: AgentState) -> AgentState:
         if state["status"] == "REJECTED":
-            self._log(state, "Патч отклонен оператором.")
+            self._log(state, "Patch rejected by operator.")
             return state
 
-        self._log(state, "Узел apply_fix: Передаю патч воркеру...")
+        self._log(state, "apply_fix node: Sending patch to worker...")
         proposal = state["proposed_fix"]
         
         if not proposal or "target_column" not in proposal:
-            self._log(state, "🚨 Попытка применить пустой патч!")
+            self._log(state, "🚨 Attempted to apply an empty patch!")
             state["status"] = "INFRA_ERROR"
             return state
 
@@ -328,7 +328,7 @@ class AgenticDataOpsGraph:
             ).json()
             self._log(state, res["message"])
         except Exception as e:
-            self._log(state, f"Не удалось отправить патч на воркер: {e}")
+            self._log(state, f"Failed to send patch to worker: {e}")
             state["status"] = "INFRA_ERROR"
             return state
 
@@ -343,7 +343,7 @@ class AgenticDataOpsGraph:
             return END
         
         if state["status"] == "INFRA_ERROR":
-            print("🚨 [GUARDRAIL] Системный сбой. Граф остановлен.", flush=True)
+            print("🚨 [GUARDRAIL] System failure. Graph halted.", flush=True)
             state["status"] = "CRITICAL_HALT"
             return END
             
@@ -351,7 +351,7 @@ class AgenticDataOpsGraph:
             if state["retry_count"] < state["max_retries"]:
                 return "ai_analyst"
             else:
-                print("🚨 [CRITICAL] Исчерпан лимит попыток!", flush=True)
+                print("🚨 [CRITICAL] Retry limit exhausted!", flush=True)
                 state["status"] = "CRITICAL_HALT"
                 return END
                 
