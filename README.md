@@ -34,6 +34,16 @@ agentic_data_ops/
 ├── docker-compose.yml          # Main container orchestrator configuration
 ├── ReadMe.txt                  # Original text instructions (translated)
 ├── README.md                   # System documentation and guides
+├── .gitignore                  # Git untracked files pattern exclusions
+├── .env_template               # Configuration template for credentials (.env)
+│
+├── docs/                       # Technical Specifications & Architecture Design (PDFs)
+│   ├── Phase 3.1 Architecture  # Sterile Working Memory & Context Compression Spec
+│   ├── Phase 3.2 Specification # Deterministic RAG & Subgraph Isolation Spec
+│   └── Phase 3.3 Architecture  # Branching State Tree DAG Specification
+│
+├── docs_personal/              # Project Roadmap & Manifesto (Excluded via gitignore)
+│   └── Step 3 Manifesto        # General Manifesto & Step 3 Roadmap Spec
 │
 ├── orchestrator/               # FastAPI + LangGraph Orchestrator
 │   ├── Dockerfile
@@ -45,6 +55,7 @@ agentic_data_ops/
 │   └── src/
 │       ├── app.py              # Web server, REST endpoints & Time-Travel logic
 │       ├── graph.py            # LangGraph state machine & router
+│       ├── context_manager.py  # Sterile Working Memory manager & semantic pruner
 │       ├── database.py         # PostgresSaver connection pool manager
 │       └── dag_state_manager.py# Postgres-backed branching state tree manager
 │
