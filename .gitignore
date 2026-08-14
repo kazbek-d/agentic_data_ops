@@ -4,3 +4,6 @@
 .env
 
 checkpoints.db
+
+# Personal docs
+/docs_personal/*
