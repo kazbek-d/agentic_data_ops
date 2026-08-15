@@ -45,7 +45,7 @@ $$
 * **Reciprocal Rank Fusion (RRF):** Merges Dense and Sparse ranks natively inside Qdrant:
 
 $$
-RRF\_Score(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}
+\text{RRF\_Score}(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}
 $$
 
 ### 3. Git-like State Tree Engine / DAG (Phase 3.3)
@@ -128,4 +128,3 @@ Approve or reject the proposed fix:
 * *Senior AI Architect & Mentor:* Google Gemini
 
 *All rights reserved. Designed for sovereign enterprise AI infrastructure research.*
-
