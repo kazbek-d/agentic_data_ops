@@ -37,7 +37,7 @@ To prevent **Attention Smearing** and the **Lost-in-the-Middle** phenomenon duri
 To eliminate cross-domain hallucinated fixes, retrieval is strictly constrained by metadata filters:
 
 $$
-\text{Search Space} = \text{Collection} \;\cap\; \text{PayloadFilter}(\text{domain}, \text{table\_name}, \text{target\_column})
+Search Space = Collection \\cap\ PayloadFilter(domain, table name, target column)
 $$
 
 * **Dense Vectors ($d=768$):** Encodes semantic intent using `gemini-embedding-001`.
@@ -45,7 +45,7 @@ $$
 * **Reciprocal Rank Fusion (RRF):** Merges Dense and Sparse ranks natively inside Qdrant:
 
 $$
-\text{RRF\_Score}(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}
+RRF Score(d) = \sum_{m \in M} \frac{1}{k + r_m(d)}
 $$
 
 ### 3. Git-like State Tree Engine / DAG (Phase 3.3)
