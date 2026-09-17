@@ -235,6 +235,6 @@ curl -X POST "http://localhost:8000/api/v1/pipeline/approve" \
 
 **CAE Data LLC**
 * *Lead Systems Architect:* Kazbek
-* *Model & Cognitive Foundations:* Google Gemini API (`google-genai` SDK, Structured Outputs & Multi-Vector Embeddings)
+* *Model & Cognitive Foundations:* Google Gemini
 
 *Designed for resilient, production-grade enterprise data automation.*
