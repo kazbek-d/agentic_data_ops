@@ -69,7 +69,7 @@ To prevent context saturation and maintain deterministic model behavior across i
 * **Semantic Log Pruning:** Raw stack traces, deep framework frames, and voluminous payload dumps are dynamically stripped down to actionable error signatures before LLM inference.
 * **Sliding Window Context:** Retains only the active anchor and the last $K$ interaction frames, strictly bounding consumption to $\sim 1,200 - 2,000$ tokens regardless of iteration count.
 
-### 2. Scoped Sub-Graph RAG via Qdrant Hybrid Search
+### 2. Scoped Sub-Graph RAG via Qdrant Hybrid Search (Phase 3.2)
 To eliminate cross-domain schema bleeding and hallucinated column transformations, vector retrieval is bounded by deterministic metadata filters:
 
 $$
