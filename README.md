@@ -1,4 +1,4 @@
-# 🛡️ CAE Data LLC — Agentic DataOps Framework
+# 🛡️ Agentic DataOps Framework
 
 **Automated Data Quality Remediation, Deterministic Hybrid RAG & Git-like State DAG Engine**
 
@@ -12,7 +12,7 @@ Integrating Large Language Models into automated data engineering workflows ofte
 2. **Cross-Domain Hallucinations:** Unconstrained vector search retrieves syntactically plausible but domain-invalid schema fixes across unrelated datasets.
 3. **Linear State Lock-in:** Traditional chat-based LLM architectures maintain flat, append-only message histories, preventing rollbacks, hypothesis branching, and structured audit trails.
 
-The **CAE Data LLC Agentic DataOps Framework** addresses these challenges by enforcing **deterministic retrieval constraints**, **strict context pruning**, **sandboxed execution runtimes**, and a **PostgreSQL-backed Directed Acyclic Graph (DAG) state engine** with Human-in-the-Loop (HITL) governance.
+The **Agentic DataOps Framework** addresses these challenges by enforcing **deterministic retrieval constraints**, **strict context pruning**, **sandboxed execution runtimes**, and a **PostgreSQL-backed Directed Acyclic Graph (DAG) state engine** with Human-in-the-Loop (HITL) governance.
 
 ---
 
@@ -233,7 +233,6 @@ curl -X POST "http://localhost:8000/api/v1/pipeline/approve" \
 
 ## 📜 Authorship & Architecture
 
-**CAE Data LLC**
 * *Lead Systems Architect:* Kazbek
 * *Model & Cognitive Foundations:* Google Gemini
 
